@@ -63,6 +63,7 @@
         <label for="wakeUpTime">Wake Up Time:</label>
         <input type="time" id="wakeUpTime" required>
         <button onclick="generateSchedule()">Generate Schedule</button>
+        <button onclick="downloadICS()">Download Schedule</button>
         
         <div class="schedule" id="schedule"></div>
     </div>
@@ -79,6 +80,22 @@
             return `${hours}:${minutesStr} ${ampm}`;
         }
 
+        function addMinutesToDate(time, minutes) {
+            const date = new Date(time);
+            date.setMinutes(date.getMinutes() + minutes);
+            return date;
+        }
+
+        function formatDateToICS(date) {
+            const pad = (n) => String(n).padStart(2, '0');
+            return date.getUTCFullYear() +
+                pad(date.getUTCMonth() + 1) +
+                pad(date.getUTCDate()) + 'T' +
+                pad(date.getUTCHours()) +
+                pad(date.getUTCMinutes()) +
+                pad(date.getUTCSeconds()) + 'Z';
+        }
+
         function setCurrentTime() {
             const now = new Date();
             const hours = String(now.getHours()).padStart(2, '0');
@@ -91,17 +108,17 @@
             if (!wakeUpTime) return alert('Please enter a wake up time.');
             
             const scheduleTimes = [
-                { activity: 'Wake Up', time: 0 },
-                { activity: 'Breakfast', time: 15 },
-                { activity: 'Morning nap', time: 120 },
-                { activity: 'Milk (upon waking)', time: 180 },
-                { activity: 'Milk', time: 330 },
-                { activity: 'Early afternoon nap', time: 360 },
-                { activity: 'Milk', time: 480 },
-                { activity: 'Catnap (30-45 minutes)', time: 540 },
-                { activity: 'Dinner', time: 600 },
-                { activity: 'Begin bedtime routine', time: 690 },
-                { activity: 'Milk and Bedtime (be asleep by)', time: 720 }
+                { activity: 'Wake Up', time: 0, duration: 15 },
+                { activity: 'Breakfast', time: 15, duration: 15 },
+                { activity: 'Morning nap', time: 120, duration: 60 },
+                { activity: 'Milk (upon waking)', time: 180, duration: 15 },
+                { activity: 'Milk', time: 330, duration: 15 },
+                { activity: 'Early afternoon nap', time: 360, duration: 60 },
+                { activity: 'Milk', time: 480, duration: 15 },
+                { activity: 'Catnap (30-45 minutes)', time: 540, duration: 45 },
+                { activity: 'Dinner', time: 600, duration: 30 },
+                { activity: 'Begin bedtime routine', time: 690, duration: 30 },
+                { activity: 'Milk and Bedtime (be asleep by)', time: 720, duration: 15 }
             ];
 
             let scheduleHTML = '';
@@ -111,6 +128,65 @@
             });
 
             document.getElementById('schedule').innerHTML = scheduleHTML;
+        }
+
+        function downloadICS() {
+            const wakeUpTime = document.getElementById('wakeUpTime').value;
+            if (!wakeUpTime) return alert('Please enter a wake up time.');
+            
+            const now = new Date();
+            const baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), ...wakeUpTime.split(':'));
+            
+            const scheduleTimes = [
+                { activity: 'Wake Up', time: 0, duration: 15 },
+                { activity: 'Breakfast', time: 15, duration: 15 },
+                { activity: 'Morning nap', time: 120, duration: 60 },
+                { activity: 'Milk (upon waking)', time: 180, duration: 15 },
+                { activity: 'Milk', time: 330, duration: 15 },
+                { activity: 'Early afternoon nap', time: 360, duration: 60 },
+                { activity: 'Milk', time: 480, duration: 15 },
+                { activity: 'Catnap (30-45 minutes)', time: 540, duration: 45 },
+                { activity: 'Dinner', time: 600, duration: 30 },
+                { activity: 'Begin bedtime routine', time: 690, duration: 30 },
+                { activity: 'Milk and Bedtime (be asleep by)', time: 720, duration: 15 }
+            ];
+
+            let icsData = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Baby Schedule//EN\n";
+
+            scheduleTimes.forEach(({activity, time, duration}) => {
+                const start = addMinutesToDate(baseDate, time);
+                const end = addMinutesToDate(start, duration);
+                icsData += "BEGIN:VEVENT\n";
+                icsData += `UID:${start.getTime()}@babyschedule.com\n`;
+                icsData += `DTSTAMP:${formatDateToICS(new Date())}\n`;
+                icsData += `DTSTART:${formatDateToICS(start)}\n`;
+                icsData += `DTEND:${formatDateToICS(end)}\n`;
+                icsData += `SUMMARY:${activity}\n`;
+                icsData += `TRANSP:TRANSPARENT\n`;  // Set the event as "free"
+                icsData += "BEGIN:VALARM\n";
+                icsData += "ACTION:DISPLAY\n";
+                icsData += "DESCRIPTION:Reminder\n";
+                icsData += "TRIGGER:-PT5M\n";
+                icsData += "END:VALARM\n";
+                icsData += "BEGIN:VALARM\n";
+                icsData += "ACTION:DISPLAY\n";
+                icsData += "DESCRIPTION:Reminder\n";
+                icsData += "TRIGGER:PT0M\n";
+                icsData += "END:VALARM\n";
+                icsData += "END:VEVENT\n";
+            });
+
+            icsData += "END:VCALENDAR";
+
+            const blob = new Blob([icsData], { type: 'text/calendar' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'baby_schedule.ics';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         window.onload = setCurrentTime;
